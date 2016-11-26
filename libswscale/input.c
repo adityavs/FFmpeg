@@ -978,6 +978,7 @@ av_cold void ff_sws_init_input_funcs(SwsContext *c)
     case AV_PIX_FMT_GBRP9LE:
         c->readChrPlanar = planar_rgb9le_to_uv;
         break;
+    case AV_PIX_FMT_GBRAP10LE:
     case AV_PIX_FMT_GBRP10LE:
         c->readChrPlanar = planar_rgb10le_to_uv;
         break;
@@ -995,6 +996,7 @@ av_cold void ff_sws_init_input_funcs(SwsContext *c)
     case AV_PIX_FMT_GBRP9BE:
         c->readChrPlanar = planar_rgb9be_to_uv;
         break;
+    case AV_PIX_FMT_GBRAP10BE:
     case AV_PIX_FMT_GBRP10BE:
         c->readChrPlanar = planar_rgb10be_to_uv;
         break;
@@ -1258,6 +1260,8 @@ av_cold void ff_sws_init_input_funcs(SwsContext *c)
     case AV_PIX_FMT_GBRP9LE:
         c->readLumPlanar = planar_rgb9le_to_y;
         break;
+    case AV_PIX_FMT_GBRAP10LE:
+        c->readAlpPlanar = planar_rgb10le_to_a;
     case AV_PIX_FMT_GBRP10LE:
         c->readLumPlanar = planar_rgb10le_to_y;
         break;
@@ -1277,6 +1281,8 @@ av_cold void ff_sws_init_input_funcs(SwsContext *c)
     case AV_PIX_FMT_GBRP9BE:
         c->readLumPlanar = planar_rgb9be_to_y;
         break;
+    case AV_PIX_FMT_GBRAP10BE:
+        c->readAlpPlanar = planar_rgb10be_to_a;
     case AV_PIX_FMT_GBRP10BE:
         c->readLumPlanar = planar_rgb10be_to_y;
         break;
@@ -1317,6 +1323,8 @@ av_cold void ff_sws_init_input_funcs(SwsContext *c)
     case AV_PIX_FMT_YUV422P16LE:
     case AV_PIX_FMT_YUV444P16LE:
 
+    case AV_PIX_FMT_GRAY10LE:
+    case AV_PIX_FMT_GRAY12LE:
     case AV_PIX_FMT_GRAY16LE:
         c->lumToYV12 = bswap16Y_c;
         break;
@@ -1351,6 +1359,8 @@ av_cold void ff_sws_init_input_funcs(SwsContext *c)
     case AV_PIX_FMT_YUV422P16BE:
     case AV_PIX_FMT_YUV444P16BE:
 
+    case AV_PIX_FMT_GRAY10BE:
+    case AV_PIX_FMT_GRAY12BE:
     case AV_PIX_FMT_GRAY16BE:
         c->lumToYV12 = bswap16Y_c;
         break;
@@ -1484,7 +1494,7 @@ av_cold void ff_sws_init_input_funcs(SwsContext *c)
     }
     if (c->needAlpha) {
         if (is16BPS(srcFormat) || isNBPS(srcFormat)) {
-            if (HAVE_BIGENDIAN == !isBE(srcFormat))
+            if (HAVE_BIGENDIAN == !isBE(srcFormat) && !c->readAlpPlanar)
                 c->alpToYV12 = bswap16Y_c;
         }
         switch (srcFormat) {

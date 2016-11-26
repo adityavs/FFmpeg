@@ -37,6 +37,7 @@
 #include "libavutil/hash.h"
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
+#include "libavutil/stereo3d.h"
 #include "libavutil/dict.h"
 #include "libavutil/intreadwrite.h"
 #include "libavutil/libm.h"
@@ -1759,6 +1760,35 @@ static inline int show_tags(WriterContext *w, AVDictionary *tags, int section_id
     return ret;
 }
 
+static void print_pkt_side_data(WriterContext *w,
+                                const AVPacketSideData *side_data,
+                                int nb_side_data,
+                                SectionID id_data_list,
+                                SectionID id_data)
+{
+    int i;
+
+    writer_print_section_header(w, SECTION_ID_STREAM_SIDE_DATA_LIST);
+    for (i = 0; i < nb_side_data; i++) {
+        const AVPacketSideData *sd = &side_data[i];
+        const char *name = av_packet_side_data_name(sd->type);
+
+        writer_print_section_header(w, SECTION_ID_STREAM_SIDE_DATA);
+        print_str("side_data_type", name ? name : "unknown");
+        print_int("side_data_size", sd->size);
+        if (sd->type == AV_PKT_DATA_DISPLAYMATRIX && sd->size >= 9*4) {
+            writer_print_integers(w, "displaymatrix", sd->data, 9, " %11d", 3, 4, 1);
+            print_int("rotation", av_display_rotation_get((int32_t *)sd->data));
+        } else if (sd->type == AV_PKT_DATA_STEREO3D) {
+            const AVStereo3D *stereo = (AVStereo3D *)sd->data;
+            print_str("type", av_stereo3d_type_name(stereo->type));
+            print_int("inverted", !!(stereo->flags & AV_STEREO3D_FLAG_INVERT));
+        }
+        writer_print_section_footer(w);
+    }
+    writer_print_section_footer(w);
+}
+
 static void show_packet(WriterContext *w, InputFile *ifile, AVPacket *pkt, int packet_idx)
 {
     char val_str[128];
@@ -1785,10 +1815,10 @@ static void show_packet(WriterContext *w, InputFile *ifile, AVPacket *pkt, int p
     print_val("size",             pkt->size, unit_byte_str);
     if (pkt->pos != -1) print_fmt    ("pos", "%"PRId64, pkt->pos);
     else                print_str_opt("pos", "N/A");
-    print_fmt("flags", "%c",      pkt->flags & AV_PKT_FLAG_KEY ? 'K' : '_');
+    print_fmt("flags", "%c%c",      pkt->flags & AV_PKT_FLAG_KEY ? 'K' : '_',
+              pkt->flags & AV_PKT_FLAG_DISCARD ? 'D' : '_');
 
     if (pkt->side_data_elems) {
-        int i;
         int size;
         const uint8_t *side_metadata;
 
@@ -1799,20 +1829,10 @@ static void show_packet(WriterContext *w, InputFile *ifile, AVPacket *pkt, int p
                 show_tags(w, dict, SECTION_ID_PACKET_TAGS);
             av_dict_free(&dict);
         }
-        writer_print_section_header(w, SECTION_ID_PACKET_SIDE_DATA_LIST);
-        for (i = 0; i < pkt->side_data_elems; i++) {
-            AVPacketSideData *sd = &pkt->side_data[i];
-            const char *name = av_packet_side_data_name(sd->type);
-            writer_print_section_header(w, SECTION_ID_PACKET_SIDE_DATA);
-            print_str("side_data_type", name ? name : "unknown");
-            print_int("side_data_size", sd->size);
-            if (sd->type == AV_PKT_DATA_DISPLAYMATRIX && sd->size >= 9*4) {
-                writer_print_integers(w, "displaymatrix", sd->data, 9, " %11d", 3, 4, 1);
-                print_int("rotation", av_display_rotation_get((int32_t *)sd->data));
-            }
-            writer_print_section_footer(w);
-        }
-        writer_print_section_footer(w);
+
+        print_pkt_side_data(w, pkt->side_data, pkt->side_data_elems,
+                            SECTION_ID_PACKET_SIDE_DATA_LIST,
+                            SECTION_ID_PACKET_SIDE_DATA);
     }
 
     if (do_show_data)
@@ -1864,8 +1884,8 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
     else   print_str_opt("media_type", "unknown");
     print_int("stream_index",           stream->index);
     print_int("key_frame",              frame->key_frame);
-    print_ts  ("pkt_pts",               frame->pkt_pts);
-    print_time("pkt_pts_time",          frame->pkt_pts, &stream->time_base);
+    print_ts  ("pkt_pts",               frame->pts);
+    print_time("pkt_pts_time",          frame->pts, &stream->time_base);
     print_ts  ("pkt_dts",               frame->pkt_dts);
     print_time("pkt_dts_time",          frame->pkt_dts, &stream->time_base);
     print_ts  ("best_effort_timestamp", av_frame_get_best_effort_timestamp(frame));
@@ -2248,6 +2268,19 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         else
             print_str_opt("chroma_location", av_chroma_location_name(par->chroma_location));
 
+        if (par->field_order == AV_FIELD_PROGRESSIVE)
+            print_str("field_order", "progressive");
+        else if (par->field_order == AV_FIELD_TT)
+            print_str("field_order", "tt");
+        else if (par->field_order == AV_FIELD_BB)
+            print_str("field_order", "bb");
+        else if (par->field_order == AV_FIELD_TB)
+            print_str("field_order", "tb");
+        else if (par->field_order == AV_FIELD_BT)
+            print_str("field_order", "bt");
+        else
+            print_str_opt("field_order", "unknown");
+
 #if FF_API_PRIVATE_OPT
         if (dec_ctx && dec_ctx->timecode_frame_start >= 0) {
             char tcbuf[AV_TIMECODE_STR_SIZE];
@@ -2350,6 +2383,7 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
     PRINT_DISPOSITION(VISUAL_IMPAIRED,  "visual_impaired");
     PRINT_DISPOSITION(CLEAN_EFFECTS,    "clean_effects");
     PRINT_DISPOSITION(ATTACHED_PIC,     "attached_pic");
+    PRINT_DISPOSITION(TIMED_THUMBNAILS, "timed_thumbnails");
     writer_print_section_footer(w);
     }
 
@@ -2357,22 +2391,9 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         ret = show_tags(w, stream->metadata, in_program ? SECTION_ID_PROGRAM_STREAM_TAGS : SECTION_ID_STREAM_TAGS);
 
     if (stream->nb_side_data) {
-        int i;
-        writer_print_section_header(w, SECTION_ID_STREAM_SIDE_DATA_LIST);
-        for (i = 0; i < stream->nb_side_data; i++) {
-            AVPacketSideData *sd = &stream->side_data[i];
-            const char *name = av_packet_side_data_name(sd->type);
-
-            writer_print_section_header(w, SECTION_ID_STREAM_SIDE_DATA);
-            print_str("side_data_type", name ? name : "unknown");
-            print_int("side_data_size", sd->size);
-            if (sd->type == AV_PKT_DATA_DISPLAYMATRIX && sd->size >= 9*4) {
-                writer_print_integers(w, "displaymatrix", sd->data, 9, " %11d", 3, 4, 1);
-                print_int("rotation", av_display_rotation_get((int32_t *)sd->data));
-            }
-            writer_print_section_footer(w);
-        }
-        writer_print_section_footer(w);
+        print_pkt_side_data(w, stream->side_data, stream->nb_side_data,
+                            SECTION_ID_STREAM_SIDE_DATA_LIST,
+                            SECTION_ID_STREAM_SIDE_DATA);
     }
 
     writer_print_section_footer(w);
@@ -2604,11 +2625,8 @@ static int open_input_file(InputFile *ifile, const char *filename)
             if (err < 0)
                 exit(1);
 
-            ist->dec_ctx->pkt_timebase = stream->time_base;
-#if FF_API_LAVF_AVCTX
-            ist->dec_ctx->time_base = stream->codec->time_base;
-            ist->dec_ctx->framerate = stream->codec->framerate;
-#endif
+            av_codec_set_pkt_timebase(ist->dec_ctx, stream->time_base);
+            ist->dec_ctx->framerate = stream->avg_frame_rate;
 
             if (avcodec_open2(ist->dec_ctx, codec, &opts) < 0) {
                 av_log(NULL, AV_LOG_WARNING, "Could not open codec for input stream %d\n",
@@ -3235,6 +3253,8 @@ int main(int argc, char **argv)
     char *w_name = NULL, *w_args = NULL;
     int ret, i;
 
+    init_dynload();
+
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
     register_exit(ffprobe_cleanup);
 
@@ -3271,6 +3291,7 @@ int main(int argc, char **argv)
     SET_DO_SHOW(FRAME_TAGS, frame_tags);
     SET_DO_SHOW(PROGRAM_TAGS, program_tags);
     SET_DO_SHOW(STREAM_TAGS, stream_tags);
+    SET_DO_SHOW(PROGRAM_STREAM_TAGS, stream_tags);
     SET_DO_SHOW(PACKET_TAGS, packet_tags);
 
     if (do_bitexact && (do_show_program_version || do_show_library_versions)) {
@@ -3290,6 +3311,12 @@ int main(int argc, char **argv)
         goto end;
     }
     w_name = av_strtok(print_format, "=", &buf);
+    if (!w_name) {
+        av_log(NULL, AV_LOG_ERROR,
+               "No name specified for the output format\n");
+        ret = AVERROR(EINVAL);
+        goto end;
+    }
     w_args = buf;
 
     if (show_data_hash) {

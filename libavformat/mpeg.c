@@ -1,5 +1,5 @@
 /*
- * MPEG1/2 demuxer
+ * MPEG-1/2 demuxer
  * Copyright (c) 2000, 2001, 2002 Fabrice Bellard
  *
  * This file is part of FFmpeg.
@@ -112,7 +112,7 @@ static int mpegps_probe(AVProbeData *p)
                           : AVPROBE_SCORE_EXTENSION / 2; // 1 more than .mpg
     if ((!!vid ^ !!audio) && (audio > 4 || vid > 1) && !sys &&
         !pspack && p->buf_size > 2048 && vid + audio > invalid) /* PES stream */
-        return (audio > 12 || vid > 3 + 2 * invalid) ? AVPROBE_SCORE_EXTENSION + 2
+        return (audio > 12 || vid > 6 + 2 * invalid) ? AVPROBE_SCORE_EXTENSION + 2
                                                      : AVPROBE_SCORE_EXTENSION / 2;
 
     // 02-Penguin.flac has sys:0 priv1:0 pspack:0 vid:0 audio:1
@@ -371,7 +371,7 @@ redo:
             goto error_redo;
         c = avio_r8(s->pb);
         len--;
-        /* XXX: for mpeg1, should test only bit 7 */
+        /* XXX: for MPEG-1, should test only bit 7 */
         if (c != 0xff)
             break;
     }

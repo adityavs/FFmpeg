@@ -35,26 +35,6 @@ struc Coeffs
     .sizeof:
 endstruc
 
-%macro EMULATE_HADDPS 3 ; dst, src, tmp
-%if cpuflag(sse3)
-    haddps  %1, %2
-%else
-    movaps  %3, %1
-    shufps  %1, %2, q2020
-    shufps  %3, %2, q3131
-    addps   %1, %3
-%endif
-%endmacro ; EMULATE_HADDPS
-
-%macro EMULATE_FMADDPS 5 ; dst, src1, src2, src3, tmp
-%if cpuflag(fma3) || cpuflag(fma4)
-    fmaddps %1, %2, %3, %4
-%else
-    mulps   %5, %2, %3
-    addps   %1, %4, %5
-%endif
-%endmacro ; EMULATE_FMADDPS
-
 %macro CQT_CALC 9
 ; %1 = a_re, %2 = a_im, %3 = b_re, %4 = b_im
 ; %5 = m_re, %6 = m_im, %7 = tmp, %8 = coeffval, %9 = coeffsq_offset
@@ -65,9 +45,9 @@ endstruc
     shufps  m%6, m%5, m%7, q3131
     shufps  m%5, m%5, m%7, q2020
     sub     id, fft_lend
-    EMULATE_FMADDPS m%2, m%6, m%8, m%2, m%6
+    FMULADD_PS m%2, m%6, m%8, m%2, m%6
     neg     id
-    EMULATE_FMADDPS m%1, m%5, m%8, m%1, m%5
+    FMULADD_PS m%1, m%5, m%8, m%1, m%5
     movups  m%5, [srcq + 8 * iq - mmsize + 8]
     movups  m%7, [srcq + 8 * iq - 2*mmsize + 8]
     %if mmsize == 32
@@ -76,18 +56,18 @@ endstruc
     %endif
     shufps  m%6, m%5, m%7, q1313
     shufps  m%5, m%5, m%7, q0202
-    EMULATE_FMADDPS m%4, m%6, m%8, m%4, m%6
-    EMULATE_FMADDPS m%3, m%5, m%8, m%3, m%5
+    FMULADD_PS m%4, m%6, m%8, m%4, m%6
+    FMULADD_PS m%3, m%5, m%8, m%3, m%5
 %endmacro ; CQT_CALC
 
 %macro CQT_SEPARATE 6 ; a_re, a_im, b_re, b_im, tmp, tmp2
     addps   m%5, m%4, m%2
     subps   m%6, m%3, m%1
-    addps   m%1, m%3
-    subps   m%2, m%4
-    EMULATE_HADDPS m%5, m%6, m%3
-    EMULATE_HADDPS m%1, m%2, m%3
-    EMULATE_HADDPS m%1, m%5, m%2
+    addps   m%1, m%1, m%3
+    subps   m%2, m%2, m%4
+    HADDPS  m%5, m%6, m%3
+    HADDPS  m%1, m%2, m%3
+    HADDPS  m%1, m%5, m%2
     %if mmsize == 32
     vextractf128 xmm%2, m%1, 1
     addps   xmm%1, xmm%2
@@ -101,7 +81,7 @@ cglobal showcqt_cqt_calc, 5, 10, 12, dst, src, coeffs, len, fft_len, x, coeffs_v
     align   16
     .loop_k:
         mov     xd, [coeffsq + Coeffs.len]
-        xorps   m0, m0
+        xorps   m0, m0, m0
         movaps  m1, m0
         movaps  m2, m0
         mov     coeffs_lend, [coeffsq + Coeffs.len + Coeffs.sizeof]
@@ -141,7 +121,7 @@ cglobal showcqt_cqt_calc, 5, 10, 12, dst, src, coeffs, len, fft_len, x, coeffs_v
         CQT_SEPARATE 8, 9, 10, 11, 4, 5
         mulps   xmm0, xmm0
         mulps   xmm8, xmm8
-        EMULATE_HADDPS xmm0, xmm8, xmm1
+        HADDPS  xmm0, xmm8, xmm1
         movaps  [dstq], xmm0
         sub     lend, 2
         lea     dstq, [dstq + 16]
@@ -166,7 +146,7 @@ cglobal showcqt_cqt_calc, 4, 7, 8, dst, src, coeffs, len, x, coeffs_val, i
     align   16
     .loop_k:
         mov     xd, [coeffsq + Coeffs.len]
-        xorps   m0, m0
+        xorps   m0, m0, m0
         movaps  m1, m0
         movaps  m2, m0
         movaps  m3, m0
@@ -183,7 +163,7 @@ cglobal showcqt_cqt_calc, 4, 7, 8, dst, src, coeffs, len, x, coeffs_val, i
             jb      .loop_x
         CQT_SEPARATE 0, 1, 2, 3, 4, 5
         mulps   xmm0, xmm0
-        EMULATE_HADDPS xmm0, xmm0, xmm1
+        HADDPS  xmm0, xmm0, xmm1
         .store:
         movlps  [dstq], xmm0
         sub     lend, 1
@@ -198,9 +178,15 @@ INIT_XMM sse
 DECLARE_CQT_CALC
 INIT_XMM sse3
 DECLARE_CQT_CALC
+%if HAVE_AVX_EXTERNAL
 INIT_YMM avx
 DECLARE_CQT_CALC
+%endif
+%if HAVE_FMA3_EXTERNAL
 INIT_YMM fma3
 DECLARE_CQT_CALC
+%endif
+%if HAVE_FMA4_EXTERNAL
 INIT_XMM fma4
 DECLARE_CQT_CALC
+%endif

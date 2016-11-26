@@ -131,6 +131,10 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_RGB0]        = { 1, 1 },
     [AV_PIX_FMT_0BGR]        = { 1, 1 },
     [AV_PIX_FMT_BGR0]        = { 1, 1 },
+    [AV_PIX_FMT_GRAY10BE]    = { 1, 1 },
+    [AV_PIX_FMT_GRAY10LE]    = { 1, 1 },
+    [AV_PIX_FMT_GRAY12BE]    = { 1, 1 },
+    [AV_PIX_FMT_GRAY12LE]    = { 1, 1 },
     [AV_PIX_FMT_GRAY16BE]    = { 1, 1 },
     [AV_PIX_FMT_GRAY16LE]    = { 1, 1 },
     [AV_PIX_FMT_YUV440P]     = { 1, 1 },
@@ -218,10 +222,12 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_GBRP9BE]     = { 1, 1 },
     [AV_PIX_FMT_GBRP10LE]    = { 1, 1 },
     [AV_PIX_FMT_GBRP10BE]    = { 1, 1 },
+    [AV_PIX_FMT_GBRAP10LE]   = { 1, 1 },
+    [AV_PIX_FMT_GBRAP10BE]   = { 1, 1 },
     [AV_PIX_FMT_GBRP12LE]    = { 1, 1 },
     [AV_PIX_FMT_GBRP12BE]    = { 1, 1 },
-    [AV_PIX_FMT_GBRAP12LE]   = { 1, 0 },
-    [AV_PIX_FMT_GBRAP12BE]   = { 1, 0 },
+    [AV_PIX_FMT_GBRAP12LE]   = { 1, 1 },
+    [AV_PIX_FMT_GBRAP12BE]   = { 1, 1 },
     [AV_PIX_FMT_GBRP14LE]    = { 1, 1 },
     [AV_PIX_FMT_GBRP14BE]    = { 1, 1 },
     [AV_PIX_FMT_GBRP16LE]    = { 1, 0 },
@@ -244,8 +250,8 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_XYZ12BE]     = { 1, 1, 1 },
     [AV_PIX_FMT_XYZ12LE]     = { 1, 1, 1 },
     [AV_PIX_FMT_AYUV64LE]    = { 1, 1},
-    [AV_PIX_FMT_P010LE]      = { 1, 0 },
-    [AV_PIX_FMT_P010BE]      = { 1, 0 },
+    [AV_PIX_FMT_P010LE]      = { 1, 1 },
+    [AV_PIX_FMT_P010BE]      = { 1, 1 },
 };
 
 int sws_isSupportedInput(enum AVPixelFormat pix_fmt)
@@ -1099,6 +1105,9 @@ static enum AVPixelFormat alphaless_fmt(enum AVPixelFormat fmt)
 
     case AV_PIX_FMT_GBRAP:              return AV_PIX_FMT_GBRP;
 
+    case AV_PIX_FMT_GBRAP10LE:          return AV_PIX_FMT_GBRP10;
+    case AV_PIX_FMT_GBRAP10BE:          return AV_PIX_FMT_GBRP10;
+
     case AV_PIX_FMT_GBRAP12LE:          return AV_PIX_FMT_GBRP12;
     case AV_PIX_FMT_GBRAP12BE:          return AV_PIX_FMT_GBRP12;
 
@@ -1370,6 +1379,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
         srcFormat != AV_PIX_FMT_RGB4_BYTE && srcFormat != AV_PIX_FMT_BGR4_BYTE &&
         srcFormat != AV_PIX_FMT_GBRP9BE   && srcFormat != AV_PIX_FMT_GBRP9LE  &&
         srcFormat != AV_PIX_FMT_GBRP10BE  && srcFormat != AV_PIX_FMT_GBRP10LE &&
+        srcFormat != AV_PIX_FMT_GBRAP10BE && srcFormat != AV_PIX_FMT_GBRAP10LE &&
         srcFormat != AV_PIX_FMT_GBRP12BE  && srcFormat != AV_PIX_FMT_GBRP12LE &&
         srcFormat != AV_PIX_FMT_GBRAP12BE && srcFormat != AV_PIX_FMT_GBRAP12LE &&
         srcFormat != AV_PIX_FMT_GBRP14BE  && srcFormat != AV_PIX_FMT_GBRP14LE &&
