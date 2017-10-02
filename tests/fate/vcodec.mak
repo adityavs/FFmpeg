@@ -213,11 +213,13 @@ fate-vsynth%-jpeg2000-97:             DECINOPTS = -vcodec jpeg2000
 FATE_VCODEC-$(call ENCDEC, LJPEG MJPEG, AVI) += ljpeg
 fate-vsynth%-ljpeg:              ENCOPTS = -strict -1
 
-FATE_VCODEC-$(call ENCDEC, MJPEG, AVI)  += mjpeg mjpeg-422 mjpeg-444 mjpeg-trell
-fate-vsynth%-mjpeg:              ENCOPTS = -qscale 9 -pix_fmt yuvj420p
-fate-vsynth%-mjpeg-422:          ENCOPTS = -qscale 9 -pix_fmt yuvj422p
-fate-vsynth%-mjpeg-444:          ENCOPTS = -qscale 9 -pix_fmt yuvj444p
-fate-vsynth%-mjpeg-trell:        ENCOPTS = -qscale 9 -pix_fmt yuvj420p -trellis 1
+FATE_VCODEC-$(call ENCDEC, MJPEG, AVI)  += mjpeg mjpeg-422 mjpeg-444 mjpeg-trell mjpeg-huffman mjpeg-trell-huffman
+fate-vsynth%-mjpeg:                   ENCOPTS = -qscale 9 -pix_fmt yuvj420p
+fate-vsynth%-mjpeg-422:               ENCOPTS = -qscale 9 -pix_fmt yuvj422p
+fate-vsynth%-mjpeg-444:               ENCOPTS = -qscale 9 -pix_fmt yuvj444p
+fate-vsynth%-mjpeg-trell:             ENCOPTS = -qscale 9 -pix_fmt yuvj420p -trellis 1
+fate-vsynth%-mjpeg-huffman:           ENCOPTS = -qscale 9 -pix_fmt yuvj420p -huffman optimal
+fate-vsynth%-mjpeg-trell-huffman:     ENCOPTS = -qscale 9 -pix_fmt yuvj420p -trellis 1 -huffman optimal
 
 FATE_VCODEC-$(call ENCDEC, MPEG1VIDEO, MPEG1VIDEO MPEGVIDEO) += mpeg1 mpeg1b
 fate-vsynth%-mpeg1:              FMT     = mpeg1video
@@ -374,11 +376,11 @@ fate-vsynth%-rv20:               FMT     = rm
 
 FATE_VCODEC-$(call ENCDEC, SNOW, AVI)   += snow snow-hpel snow-ll
 fate-vsynth%-snow:               ENCOPTS = -qscale 2 -flags +qpel \
-                                           -me_method iter -dia_size 2       \
+                                           -motion_est iter -dia_size 2      \
                                            -cmp 12 -subcmp 12 -s 128x64
 
 fate-vsynth%-snow-hpel:          ENCOPTS = -qscale 2              \
-                                           -me_method iter -dia_size 2       \
+                                           -motion_est iter -dia_size 2      \
                                            -cmp 12 -subcmp 12 -s 128x64
 
 fate-vsynth%-snow-ll:            ENCOPTS = -qscale .001 -pred 1 \

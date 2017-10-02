@@ -691,20 +691,22 @@ static int asf_read_properties(AVFormatContext *s, const GUIDParseTable *g)
 
 static int parse_video_info(AVIOContext *pb, AVStream *st)
 {
-    uint16_t size;
+    uint16_t size_asf; // ASF-specific Format Data size
+    uint32_t size_bmp; // BMP_HEADER-specific Format Data size
     unsigned int tag;
 
     st->codecpar->width  = avio_rl32(pb);
     st->codecpar->height = avio_rl32(pb);
     avio_skip(pb, 1); // skip reserved flags
-    size = avio_rl16(pb); // size of the Format Data
-    tag  = ff_get_bmp_header(pb, st, NULL);
+    size_asf = avio_rl16(pb);
+    tag = ff_get_bmp_header(pb, st, &size_bmp);
     st->codecpar->codec_tag = tag;
     st->codecpar->codec_id  = ff_codec_get_id(ff_codec_bmp_tags, tag);
+    size_bmp = FFMAX(size_asf, size_bmp);
 
-    if (size > BMP_HEADER_SIZE) {
+    if (size_bmp > BMP_HEADER_SIZE) {
         int ret;
-        st->codecpar->extradata_size  = size - BMP_HEADER_SIZE;
+        st->codecpar->extradata_size  = size_bmp - BMP_HEADER_SIZE;
         if (!(st->codecpar->extradata = av_malloc(st->codecpar->extradata_size +
                                                AV_INPUT_BUFFER_PADDING_SIZE))) {
             st->codecpar->extradata_size = 0;
@@ -960,7 +962,7 @@ static int asf_read_data(AVFormatContext *s, const GUIDParseTable *g)
                size, asf->nb_packets);
     avio_skip(pb, 2); // skip reserved field
     asf->first_packet_offset = avio_tell(pb);
-    if (pb->seekable && !(asf->b_flags & ASF_FLAG_BROADCAST))
+    if ((pb->seekable & AVIO_SEEKABLE_NORMAL) && !(asf->b_flags & ASF_FLAG_BROADCAST))
         align_position(pb, asf->offset, asf->data_size);
 
     return 0;
@@ -1485,7 +1487,7 @@ static int asf_read_packet(AVFormatContext *s, AVPacket *pkt)
             asf->return_subpayload = 0;
             return 0;
         }
-        for (i = 0; i < s->nb_streams; i++) {
+        for (i = 0; i < asf->nb_streams; i++) {
             ASFPacket *asf_pkt = &asf->asf_st[i]->pkt;
             if (asf_pkt && !asf_pkt->size_left && asf_pkt->data_size) {
                 if (asf->asf_st[i]->span > 1 &&
@@ -1738,7 +1740,9 @@ static int asf_read_header(AVFormatContext *s)
             size = avio_rl64(pb);
             align_position(pb, asf->offset, size);
         }
-        if (asf->data_reached && (!pb->seekable || (asf->b_flags & ASF_FLAG_BROADCAST)))
+        if (asf->data_reached &&
+            (!(pb->seekable & AVIO_SEEKABLE_NORMAL) ||
+             (asf->b_flags & ASF_FLAG_BROADCAST)))
             break;
     }
 
@@ -1747,7 +1751,7 @@ static int asf_read_header(AVFormatContext *s)
         ret = AVERROR_INVALIDDATA;
         goto failed;
     }
-    if (pb->seekable)
+    if (pb->seekable & AVIO_SEEKABLE_NORMAL)
         avio_seek(pb, asf->first_packet_offset, SEEK_SET);
 
     for (i = 0; i < asf->nb_streams; i++) {

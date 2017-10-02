@@ -58,17 +58,20 @@ static int cudaupload_query_formats(AVFilterContext *ctx)
 
     static const enum AVPixelFormat input_pix_fmts[] = {
         AV_PIX_FMT_NV12, AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV444P,
+        AV_PIX_FMT_P010, AV_PIX_FMT_P016, AV_PIX_FMT_YUV444P16,
         AV_PIX_FMT_NONE,
     };
     static const enum AVPixelFormat output_pix_fmts[] = {
         AV_PIX_FMT_CUDA, AV_PIX_FMT_NONE,
     };
     AVFilterFormats *in_fmts  = ff_make_format_list(input_pix_fmts);
-    AVFilterFormats *out_fmts = ff_make_format_list(output_pix_fmts);
+    AVFilterFormats *out_fmts;
 
     ret = ff_formats_ref(in_fmts, &ctx->inputs[0]->out_formats);
     if (ret < 0)
         return ret;
+
+    out_fmts = ff_make_format_list(output_pix_fmts);
 
     ret = ff_formats_ref(out_fmts, &ctx->outputs[0]->in_formats);
     if (ret < 0)
@@ -111,20 +114,16 @@ static int cudaupload_config_output(AVFilterLink *outlink)
 static int cudaupload_filter_frame(AVFilterLink *link, AVFrame *in)
 {
     AVFilterContext   *ctx = link->dst;
-    CudaUploadContext   *s = ctx->priv;
+    AVFilterLink  *outlink = ctx->outputs[0];
 
     AVFrame *out = NULL;
     int ret;
 
-    out = av_frame_alloc();
+    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
     if (!out) {
         ret = AVERROR(ENOMEM);
         goto fail;
     }
-
-    ret = av_hwframe_get_buffer(s->hwframe, out, 0);
-    if (ret < 0)
-        goto fail;
 
     out->width  = in->width;
     out->height = in->height;
@@ -151,7 +150,7 @@ fail:
 #define OFFSET(x) offsetof(CudaUploadContext, x)
 #define FLAGS (AV_OPT_FLAG_FILTERING_PARAM | AV_OPT_FLAG_VIDEO_PARAM)
 static const AVOption cudaupload_options[] = {
-    { "device", "Number of the device to use", OFFSET(device_idx), AV_OPT_TYPE_INT, { .i64 = 0 }, .flags = FLAGS },
+    { "device", "Number of the device to use", OFFSET(device_idx), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, FLAGS },
     { NULL },
 };
 
@@ -189,4 +188,6 @@ AVFilter ff_vf_hwupload_cuda = {
 
     .inputs    = cudaupload_inputs,
     .outputs   = cudaupload_outputs,
+
+    .flags_internal = FF_FILTER_FLAG_HWFRAME_AWARE,
 };
