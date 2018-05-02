@@ -1036,25 +1036,24 @@ static int svq3_decode_slice_header(AVCodecContext *avctx)
         slice_bits   = slice_length * 8;
         slice_bytes  = slice_length + length - 1;
 
-        if (8LL*slice_bytes > get_bits_left(&s->gb)) {
-            av_log(avctx, AV_LOG_ERROR, "slice after bitstream end\n");
-            return -1;
-        }
-
         skip_bits(&s->gb, 8);
 
         av_fast_malloc(&s->slice_buf, &s->slice_size, slice_bytes + AV_INPUT_BUFFER_PADDING_SIZE);
         if (!s->slice_buf)
             return AVERROR(ENOMEM);
 
+        if (slice_bytes * 8LL > get_bits_left(&s->gb)) {
+            av_log(avctx, AV_LOG_ERROR, "slice after bitstream end\n");
+            return AVERROR_INVALIDDATA;
+        }
         memcpy(s->slice_buf, s->gb.buffer + s->gb.index / 8, slice_bytes);
 
+        if (s->watermark_key) {
+            uint32_t header = AV_RL32(&s->slice_buf[1]);
+            AV_WL32(&s->slice_buf[1], header ^ s->watermark_key);
+        }
         init_get_bits(&s->gb_slice, s->slice_buf, slice_bits);
 
-        if (s->watermark_key) {
-            uint32_t header = AV_RL32(&s->gb_slice.buffer[1]);
-            AV_WL32(&s->gb_slice.buffer[1], header ^ s->watermark_key);
-        }
         if (length > 0) {
             memmove(s->slice_buf, &s->slice_buf[slice_length], length - 1);
         }
